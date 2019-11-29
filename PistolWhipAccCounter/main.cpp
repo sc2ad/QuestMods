@@ -45,17 +45,13 @@ MAKE_HOOK_OFFSETLESS(GunAmmoDisplayUpdate, void, Il2CppObject *self)
     {
         return;
     }
-    int bulletCount;
-    il2cpp_utils::GetFieldValue(&bulletCount, reinterpret_cast<Il2CppObject *>(self), "currentBulletCount");
-    // int previousBulletCount;
-    // il2cpp_utils::GetFieldValue(&previousBulletCount, reinterpret_cast<Il2CppObject*>(self), "previousBulletCount");
-    // if (bulletCount == previousBulletCount && bulletCount == lastBullets) return; // No shot fired
-    if (bulletCount == lastBullets)
-        return; // No shot fired
     float accuracy;
     il2cpp_utils::GetFieldValue(&accuracy, GameData, "accuracy");
     if (lastAcc == accuracy)
         return; // No accuracy change
+
+    int bulletCount;
+    il2cpp_utils::GetFieldValue(&bulletCount, reinterpret_cast<Il2CppObject *>(self), "currentBulletCount");
 
     Il2CppObject *displayTextObj = il2cpp_utils::GetFieldValue(self, "displayText");
 
@@ -75,7 +71,6 @@ MAKE_HOOK_OFFSETLESS(GunAmmoDisplayUpdate, void, Il2CppObject *self)
     il2cpp_utils::RunMethod(displayTextObj, set_text_method, il2cpp_functions::string_new(text.data()));
 
     lastAcc = accuracy;
-    lastBullets = bulletCount;
 }
 
 // THESE HOOKS JUST MAKE SURE WE UPDATE THE DISPLAY WHEN WE DO THINGS
@@ -96,17 +91,16 @@ MAKE_HOOK_OFFSETLESS(GameDataAddScore, void, Il2CppObject *self, Il2CppObject *S
 {
     log(INFO, "GameData AddScore hook called.");
     GameDataAddScore(self, ScoreItem);
-    static auto ScoreItemKlass = il2cpp_utils::GetClassFromName("", "ScoreItem");
-    int onBeatValue;
-    il2cpp_utils::GetFieldValue(&onBeatValue, ScoreItem, "onBeatValue");
-    log(INFO, "onBeatValue of score being added: %i", onBeatValue);
-
+    // ScoreItem is actually a struct not a class!
+    log(INFO, "ScoreItem: %p", ScoreItem);
+    // Hack for struct field fix? Might need to double check to see how this behaves with structs, since it seemingly does not.
+    auto tmp = reinterpret_cast<int*>(ScoreItem);
+    // Field of interest: 0x14
+    log(INFO, "onBeatValue of score being added: %i", tmp[5]);
 }
-static void *imagehandle;
-MAKE_HOOK_OFFSETLESS(il2cppInit, void, const char *domainName)
-{
-    dlclose(imagehandle); // the library has now been opened naturally
-    il2cppInit(domainName);
+
+extern "C" void load() {
+    log(INFO, "Loaded AccCounter!");
     log(INFO, "Installing AccCounter Hooks!");
     INSTALL_HOOK_OFFSETLESS(PlayerActionManagerGameStart, il2cpp_utils::GetMethod("", "PlayerActionManager", "OnGameStart", 1));
     INSTALL_HOOK_OFFSETLESS(GunAmmoDisplayUpdate, il2cpp_utils::GetMethod("", "GunAmmoDisplay", "Update", 0));
@@ -119,15 +113,4 @@ MAKE_HOOK_OFFSETLESS(il2cppInit, void, const char *domainName)
 __attribute__((constructor)) void lib_main()
 {
     log(INFO, "Constructed AccCounter!");
-
-    imagehandle = dlopen(IL2CPP_SO_PATH, RTLD_LOCAL | RTLD_LAZY);
-    if (!imagehandle)
-    {
-        log(ERROR, "Failed to dlopen %s: %s", IL2CPP_SO_PATH, dlerror());
-        return;
-    }
-
-    auto init = dlsym(imagehandle, "il2cpp_init");
-    log(INFO, "init_hook: %p, init: %p", il2cppInit, init);
-    INSTALL_HOOK_DIRECT(il2cppInit, init);
 }
